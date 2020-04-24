@@ -1,7 +1,13 @@
+import Map from './Map'
+import Monitor from './Monitor'
+
 export default class Events {
-  constructor(mount, map, handlers) {
+  private readonly map: Map
+  private readonly monitor: Monitor 
+
+  constructor(mount, map, monitor) {
     this.map = map
-    this.handlers = handlers
+    this.monitor = monitor
 
     this.mouseCoordinate = mount.mouseCoordinate
     this.moveData = {
@@ -109,7 +115,7 @@ export default class Events {
     const currentTime = Date.now()
     const timeDelta = currentTime - this.lastMouseUp
     if (!this.pinching && this.lastMouseUp && timeDelta < 300 && Math.abs(mouseMoveDelta.x) < 10 && Math.abs(mouseMoveDelta.y) < 10) {
-      this.handlers.setZoom(this.map.zoom - 1, true)
+      this.monitor.setZoom(this.map.zoom - 1, true)
       this.lastMouseUp = 0
       return
     }
@@ -126,7 +132,7 @@ export default class Events {
       const tiles = [];
       const {minTileZoom, maxTileZoom, tileSize} = this.map.config
 
-      let imageCoordinate = this.handlers.containerPixelToCoordinate(currentMoveCoordinate)
+      let imageCoordinate = this.monitor.containerPixelToCoordinate(currentMoveCoordinate)
 
       for (let i = minTileZoom; i <= maxTileZoom; i++) {
         const tx = Math.floor(imageCoordinate.x / Math.pow(2, i - 1) / tileSize) * tileSize
@@ -149,8 +155,8 @@ export default class Events {
       const realX = sx * Math.pow(2, this.map.currentZoom-1) * 200
       const realY = sy * Math.pow(2, this.map.currentZoom-1) * 200
 
-      this.handlers.isPanning = true
-      this.handlers.panTo({x: map.center.x - realX, y: map.center.y - realY})
+      this.monitor.isPanning = true
+      this.monitor.panTo({x: map.center.x - realX, y: map.center.y - realY})
       return
     }
   }
@@ -159,7 +165,7 @@ export default class Events {
     const delta = e.deltaY 
     if (delta) {
       let newZoom = this.map.zoom - delta / 3 / 32
-      this.handlers.setZoom(newZoom, true /* follow mouse */)
+      this.monitor.setZoom(newZoom, true)
     }
   }
 }

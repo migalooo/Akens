@@ -1,9 +1,15 @@
+interface Events {
+  [event: string]: Function[]
+}
+
 export default class Observer {
+  private readonly events: Events
+
   constructor() {
     this.events = {}
   }
-  on(event, callback) {
 
+  public on(event: string, callback: Function) {
     if (!this.events[event]) {
       this.events[event] = []
     }
@@ -12,8 +18,8 @@ export default class Observer {
 
     return callback
   }
-  off(event, searchedHandler) {
 
+  public off(event: string, searchedHandler: Function) {
     if (this.events && this.events[event]) {
       for (let i = 0; i < this.events[event].length; i++) {
         let handler = this.events[event][i]
@@ -23,8 +29,8 @@ export default class Observer {
       }
     }
   }
-  trigger(event, ...args) {
 
+  public emit(event: string, ...args) {
     if (this.events[event]) {
       this.events[event].forEach(callback => {
         if (callback) {

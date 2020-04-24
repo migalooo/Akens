@@ -1,68 +1,73 @@
 // @ts-ignore
 import PIXI  from 'PIXI'
-import Map from './Map'
-import Events from './Events.js'
-import Handlers from './Handlers.js'
-import Observer from './Observer'
-import {Options, Mount} from './interfaces'
+import {Options, Mount, Size} from './interfaces'
 import {PixiRender, PixiStage} from './PixiInterfaces'
 
-const defaultOptions: Options = {
-  width: 158701,
-  height: 26180,
-  maxTileZoom: 8,
-  minTileZoom: 1,
-  maxZoom: 8,
-  minZoom: 1,
-  defaultZoom: 6,
-  tileSize: 512,
-  tilePath: '',
-  dpr: 1,
-  background: 0x363636,
-  panSpeed: 0.1 
-}
+import Map from './Map'
+import Events from './Events'
+import Monitor from './Monitor'
+import Observe from './Observe'
+
+// const defaultOptions: Options = {
+//   width: 158701,
+//   height: 26180,
+//   maxTileZoom: 8,
+//   minTileZoom: 1,
+//   maxZoom: 8,
+//   minZoom: 1,
+//   defaultZoom: 6,
+//   tileSize: 512,
+//   tilePath: '',
+//   dpr: 1,
+//   background: 0x363636,
+//   panSpeed: 0.1 
+// }
 
 export default class ImageViewer {
-  el: HTMLElement 
-  followMouse: boolean
-  lastAnimTime: number 
-  mount: Mount
-  options: Options
+  private readonly el: HTMLElement 
+  // followMouse: boolean
+  private mount: Mount
+  private options: Options
 
-  map: Map
-  observe: Observer
-  handlers: Handlers
-  events: Events 
+  private map: Map
+  private observe: Observe
+  private monitor: Monitor
+  private events: Events 
 
-  render: PixiRender 
-  stage: PixiStage 
+  private render: PixiRender 
+  private stage: PixiStage 
 
   constructor(el: string | HTMLElement, options: Options){
     if (typeof el === 'string') el = document.querySelector(el) as HTMLElement
     this.el = el
-    this.followMouse = false
-    this.options = Object.assign({}, defaultOptions, options)
+    // this.followMouse = false
+    this.options = options
+      // Object.assign({}, defaultOptions, options)
     this.init()
   }
 
   public init() {
     this.mount = {
-      el: this.el,
-      size: this.getSize(),
-      mouseCoordinate: {x: 0, y: 0}
+      mouseCoordinate: {
+        x: 0,
+        y: 0
+      },
+      canvasSize: this.getCanvasSize(),
+      lastAnimTime: 0,
+      lastAnimTimeDelta: 0
     }
-    this.observe= new Observer()
+    this.observe= new Observe()
     this.setupPixi()
     this.map = new Map(this.options, this.stage, this.observe, this.mount)
-    this.handlers  = new Handlers(this.map, this.observe, this.mount, this.render)
-    this.events = new Events(this.mount, this.map, this.handlers)
+    this.monitor  = new Monitor(this.options, this.map, this.observe, this.mount, this.render)
+    this.events = new Events(this.mount, this.map, this.monitor)
     this.animateRender()
   }
 
-  private getSize() {
+  private getCanvasSize(): Size {
     return {
-      canvasW: Math.min(window.innerWidth, this.el.offsetWidth),
-      canvasH: Math.min(window.innerHeight, this.el.offsetHeight)
+      width: Math.min(window.innerWidth, this.el.offsetWidth),
+      height: Math.min(window.innerHeight, this.el.offsetHeight)
     }
   }
 
@@ -71,8 +76,8 @@ export default class ImageViewer {
 
     console.log("Initialize pixi with dpr:", this.options.dpr)
 
-    const size = this.mount.size
-    const renderDimensions = {width: size.canvasW * this.options.dpr, height: size.canvasH * this.options.dpr};
+    const canvasSize = this.mount.canvasSize
+    const renderDimensions = {width: canvasSize.width * this.options.dpr, height: canvasSize.height * this.options.dpr}
 
     // if (this.options.dpr < 1) {
     //   this.el.className += ' lowperf-device';
@@ -87,12 +92,12 @@ export default class ImageViewer {
 
   private animateRender(time: number = 0) {
     window.requestAnimationFrame(this.animateRender.bind(this))
-    this.map.lastAnimTimeDelta = time - (this.lastAnimTime || 0)
-    this.lastAnimTime = time
+    this.mount.lastAnimTimeDelta = time - this.mount.lastAnimTime
+    this.mount.lastAnimTime = time
 
-    this.observe.trigger('beforeRender', time)
+    this.observe.emit('beforeRender', time)
     this.render.render(this.stage)
-    this.observe.trigger('afterRender', time)
+    this.observe.emit('afterRender', time)
   }
 }
 

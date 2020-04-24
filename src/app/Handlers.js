@@ -53,12 +53,14 @@ export default class Handlers {
 
     map.setZoom( zoom )
 
+    // force is invaluable
     if (force) {
       this.updateZoom('', true)
     }
   }
 
   updateZoom(time, force) {
+    console.log('force', force)
     const map = this.map
     const {zoom, center, currentZoom, lastAnimTimeDelta, followMouse} = map
     const {minZoom, maxZoom, maxTileZoom, minTileZoom} = map.config 
@@ -104,7 +106,7 @@ export default class Handlers {
     }
   }
 
-  updatePosition () {
+  updatePosition (e) {
     const map = this.map
     const { center, targetCenter, currentZoom, dpr} = map
     const size = this.size

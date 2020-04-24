@@ -1,78 +1,102 @@
+// @ts-ignore
 import PIXI  from 'PIXI'
+import Observe from './Observe'
+
+import {Options, Coordinate, TileStore, Mount, Size} from './interfaces'
+import {PixiStage, PixiGraphics, PixiDisplayObjectContainer} from './PixiInterfaces'
+
 import {throttle, debounce} from './tools'
 import consts from './consts'
 const {PAN_DIRECTION_LEFT, PAN_DIRECTION_RIGHT}  = consts
 
 export default class Map {
-  constructor(config, stage, observe, events){
+  private readonly options: Options
+  private readonly observe: Observe
+  private readonly canvasSize: Size 
+
+  private readonly tileStore: TileStore = {}
+
+  public  zoom: number
+  public  currentZoom: number
+  public  zoomLevel: number
+
+  public  readonly center: Coordinate
+  public  readonly targetCenter: Coordinate
+  public  followMouse: boolean = false
+
+  public  panSpeed: number
+  public  panDirection: number
+
+  public  tileLoadingCounter: number = 0
+
+  public  loadMap: Function
+  public  loadMapMedium: Function
+  public  loadMapSlow: Function
+  public  loadMapDebounced: Function
+
+  public  mapCollections: PixiDisplayObjectContainer[] = []
+  public  mapContainer: PixiDisplayObjectContainer
+  private mapContainerZoomLevels: PixiDisplayObjectContainer
+  public  mapContainerBackground: PixiDisplayObjectContainer
+
+  constructor(options: Options, stage: PixiStage, observe: Observe, mount: Mount){
     this.observe = observe
-    this.config = config
+    this.options = options
+    this.canvasSize = mount.canvasSize
 
-    this.size = events.size 
-   
-
-    this.zoom = config.defaultZoom
-    this.currentZoom = config.defaultZoom 
+    this.zoom = options.defaultZoom
+    this.currentZoom = options.defaultZoom 
     this.zoomLevel = Math.floor(Math.round(this.currentZoom*10)/10)
 
 
-    const coordinate = config.center || {x: config.width/2, y: config.height/2}
-    this.center = coordinate
-    this.targetCenter = coordinate
+    const coordinate = options.center || {x: options.imageW/2, y: options.imageH/2}
+    this.center.x = coordinate.x
+    this.center.y = coordinate.y
+    this.targetCenter.x = coordinate.x
+    this.targetCenter.y = coordinate.y
 
-    this.dpr = config.dpr
-
-    this.followMouse = false
-
-    this.panSpeed = config.panSpeed
+    this.panSpeed = options.panSpeed
     this.panDirection = PAN_DIRECTION_RIGHT
 
-    this.tiles = {}
-    this.tileLoadingCounter = 0
-
     this.initMapLoaders()
-
     this.initContainer(stage)
     this.preLoadTiles()
-
-    this.initEvents()
-
+    this.bindEvents()
   }
 
-  initContainer(stage) {
-    const {maxZoom, minZoom, width, height, maxTileZoom, tileSize} = this.config
+  initContainer(stage: PixiStage) {
+    const {maxZoom, minZoom, imageW, imageH, maxTileZoom, tileSize} = this.options
 
-    this.mapContainerZoom = []
     this.mapContainer = new PIXI.DisplayObjectContainer()
-    this.mapContainerZoomLevels = new PIXI.DisplayObjectContainer()
     this.mapContainer.interactive = true
+    this.mapContainerZoomLevels = new PIXI.DisplayObjectContainer()
     this.mapContainerBackground = new PIXI.DisplayObjectContainer()
 
-    let box = new PIXI.Graphics()
-      // .beginFill(background)
-      .drawRect(0, 0, width, height)
+    let graphics: PixiGraphics = new PIXI.Graphics()
+      // .beginFill(this.options.background)
+      .drawRect(0, 0, imageW, imageH)
       .endFill()
 
-    box.position.x = 0
-    box.position.y = 0
+    graphics.position.x = 0
+    graphics.position.y = 0
 
-    this.mapContainerBackground.addChild(box)
+    this.mapContainerBackground.addChild(graphics)
     this.mapContainerBackground.scale.x = this.mapContainerBackground.scale.y = 1 / Math.pow(2, this.currentZoom - 1)
     this.mapContainer.addChild(this.mapContainerBackground);
 
     for (let i = maxZoom; i >= minZoom; i--) {
-      this.mapContainerZoom[i] = new PIXI.DisplayObjectContainer()
-      this.mapContainerZoom[i].visible = true;
+      this.mapCollections[i] = new PIXI.DisplayObjectContainer()
+      this.mapCollections[i].visible = true;
       // Scale the containers
-      this.mapContainerZoom[i].scale.x = this.mapContainerZoom[i].scale.y = 1 / Math.pow(2, this.currentZoom - i)
-      this.mapContainerZoomLevels.addChild(this.mapContainerZoom[i])
+      this.mapCollections[i].scale.x = this.mapCollections[i].scale.y = 1 / Math.pow(2, this.currentZoom - i)
+      this.mapContainerZoomLevels.addChild(this.mapCollections[i])
     }
 
     this.mapContainer.addChild(this.mapContainerZoomLevels)
 
     stage.addChild(this.mapContainer)
   }
-  initEvents() {
+  private bindEvents() {
     const observe = this.observe
 
     const allTilesLoadedHandler = () => {
@@ -82,12 +106,12 @@ export default class Map {
     observe.on('allTilesLoaded', allTilesLoadedHandler)
   }
   
-  preLoadTiles() {
-    const {tileSize, maxTileZoom, width, height} = this.config
+  private preLoadTiles() {
+    const {tileSize, maxTileZoom, imageW, imageH} = this.options
     // Preload all tiles in top layer
     const scaleFactor = Math.pow(2, maxTileZoom - 1)
-    const maxAvailableXTile = Math.floor((width  / scaleFactor - 1) / tileSize) * tileSize
-    const maxAvailableYTile = Math.floor((height / scaleFactor - 1) / tileSize) * tileSize
+    const maxAvailableXTile = Math.floor((imageW  / scaleFactor - 1) / tileSize) * tileSize
+    const maxAvailableYTile = Math.floor((imageH / scaleFactor - 1) / tileSize) * tileSize
 
     for (let x = 0; x <= maxAvailableXTile; x+=tileSize) {
       for (let y = 0; y <= maxAvailableYTile; y+=tileSize) {
@@ -96,18 +120,17 @@ export default class Map {
     }
   }
 
-  mapLoader() {
-    const {tileSize, maxTileZoom, minTileZoom, width, height} = this.config
+  private mapLoader() {
+    const {tileSize, maxTileZoom, minTileZoom, imageW, imageH} = this.options
 
     const currentZoom = Math.floor(Math.max(Math.min(this.currentZoom, maxTileZoom), minTileZoom)*10) / 10
-
     // place current zoom level at top of containers children
     if (Math.floor(currentZoom) !== this.zoomLevel) {
       // Loading a new zoom level
       console.log("Load a new zoom level!")
       this.zoomLevel = Math.floor(Math.round(this.currentZoom*10)/10)
-      this.mapContainerZoomLevels.removeChild(this.mapContainerZoom[this.zoomLevel])
-      this.mapContainerZoomLevels.addChild(this.mapContainerZoom[this.zoomLevel])
+      this.mapContainerZoomLevels.removeChild(this.mapCollections[this.zoomLevel])
+      this.mapContainerZoomLevels.addChild(this.mapCollections[this.zoomLevel])
     }
 
     if (console.groupCollapsed) {
@@ -115,18 +138,18 @@ export default class Map {
     }
 
     console.log("Find out which tiles are needed")
-    console.log("Dimensions of the map:", width, height)
+    console.log("Dimensions of the map:", imageW, imageH)
     console.log("Current zoom:", currentZoom)
     console.log("Zoom level:", this.zoomLevel)
 
-    const mapDimensions = this.getMapSizeForZoom(width, height, this.zoomLevel)
+    const mapDimensions = this.getMapSizeForZoom(imageW, imageH, this.zoomLevel)
     const zoomDiff   = currentZoom - this.zoomLevel
-    const map_width  = mapDimensions.width
-    const map_height = mapDimensions.height
+    const map_width  = mapDimensions.imageW
+    const map_height = mapDimensions.imageH
     const pos_x      = this.mapContainer.position.x * -1   * Math.pow(2, zoomDiff)
     const pos_y      = this.mapContainer.position.y * -1   * Math.pow(2, zoomDiff)
-    const w          = this.size.canvasW                   * Math.pow(2, zoomDiff)
-    const h          = this.size.canvasH                  * Math.pow(2, zoomDiff)
+    const w          = this.canvasSize.width * Math.pow(2, zoomDiff)
+    const h          = this.canvasSize.height * Math.pow(2, zoomDiff)
 
     console.log("Zoom difference:", zoomDiff)
     console.log("Closest zoomed dimensions of the map:", map_width, map_height)
@@ -199,36 +222,37 @@ export default class Map {
     }
 
   }
-  //public
-  getMapSizeForZoom(width, height, zoomLevel) {
-    const map_width  = Math.ceil(width / Math.pow(2, zoomLevel-1))
-    const map_height = Math.ceil(height / Math.pow(2, zoomLevel-1))
 
-    return {width: map_width, height: map_height}
+  // Get map size in viewport
+  private getMapSizeForZoom(imageW: number, imageH: number, zoomLevel: number) {
+    const map_width  = Math.ceil(imageW / Math.pow(2, zoomLevel-1))
+    const map_height = Math.ceil(imageH / Math.pow(2, zoomLevel-1))
+
+    return {imageW: map_width, imageH: map_height}
   }
 
-  addTile(tileX,tileY, zoomLevel) {
-    const mapContainer = this.mapContainerZoom[zoomLevel]
+  private addTile(tileX: number, tileY: number, zoomLevel: number): boolean {
+    const mapContainer = this.mapCollections[zoomLevel]
     const tileName = `${zoomLevel}_${tileX}_${tileY}`
 
-    if (typeof this.tiles[tileName] !== 'undefined') {
+    if (typeof this.tileStore[tileName] !== 'undefined') {
       console.log('Show existing sprite')
 
-      this.tiles[tileName].visible = true
+      this.tileStore[tileName].visible = true
       return false
     } else {
       this.showAllZoomLayers()
       this.tileLoadingCounter++
 
-      const src = this.config.tilePath + zoomLevel + "/tile_"+tileX+"_"+tileY+".jpg"
+      const src = this.options.tilePath + zoomLevel + "/tile_"+tileX+"_"+tileY+".jpg"
       console.log('Loading', src)
 
       this.imageLoader(src, true)
         .then(texture => {
-          this.tiles[tileName] = this.addSpriteToMap(tileX, tileY, texture, mapContainer)
+          this.tileStore[tileName] = this.addSpriteToMap(tileX, tileY, texture, mapContainer)
           if (--this.tileLoadingCounter === 0) {
             console.log("All tiles loaded, hiding other zoom levels");
-            this.observe.trigger('allTilesLoaded')
+            this.observe.emit('allTilesLoaded')
             this.hideZoomLayers()
           }
         })
@@ -239,16 +263,16 @@ export default class Map {
     }
   }
 
-  hideTile(x, y, zoomLevel) {
-    if (typeof this.tiles[zoomLevel + '_' + x + '_' + y] !== 'undefined') {
+  private hideTile(x: number, y: number, zoomLevel: number): boolean {
+    if (typeof this.tileStore[zoomLevel + '_' + x + '_' + y] !== 'undefined') {
       console.log('Hide existing sprite')
-      this.tiles[zoomLevel + '_' + x + '_' + y].visible = false
+      this.tileStore[zoomLevel + '_' + x + '_' + y].visible = false
       return true
     }
     return false
   }
 
-  imageLoader (src, crossOrigin) {
+  private imageLoader (src: string, crossOrigin: boolean) {
     return new Promise(function(resolve, reject){
       const loader = new PIXI.ImageLoader(src, crossOrigin)
       loader.onLoaded = function(ctx) {
@@ -258,25 +282,25 @@ export default class Map {
     })
   }
 
-  showAllZoomLayers() {
-    const {minTileZoom, maxTileZoom} = this.config
+  public showAllZoomLayers() {
+    const {minTileZoom, maxTileZoom} = this.options
     for (let i = minTileZoom; i <= maxTileZoom; i++) {
-      this.mapContainerZoom[i].visible = true
+      this.mapCollections[i].visible = true
     }
   }
 
   hideZoomLayers() {
-    const {minTileZoom, maxTileZoom} = this.config
+    const {minTileZoom, maxTileZoom} = this.options
     for (let i = minTileZoom; i <= maxTileZoom; i++) {
       if (i !== this.zoomLevel) {
-        this.mapContainerZoom[i].visible = false
+        this.mapCollections[i].visible = false
       }
     }
-    this.mapContainerZoom[this.zoomLevel].visible = true
+    this.mapCollections[this.zoomLevel].visible = true
   }
 
-  addSpriteToMap (x, y, texture, mapContainer) {
-    const sprite = new PIXI.Sprite(texture);
+  addSpriteToMap (x: number, y: number, texture: object, mapContainer: PixiDisplayObjectContainer): PixiGraphics {
+    const sprite: PixiGraphics = new PIXI.Sprite(texture);
     sprite.anchor.x = sprite.anchor.y = 0
     sprite.position.x = x
     sprite.position.y = y
@@ -287,57 +311,59 @@ export default class Map {
   }
 
 
-  initMapLoaders() {
+  private initMapLoaders() {
     this.loadMap          = throttle(this.mapLoader, 250)
     this.loadMapMedium    = throttle(this.mapLoader, 1250)
     this.loadMapSlow      = throttle(this.mapLoader, 3000)
     this.loadMapDebounced = debounce(this.mapLoader, 250)
   }
 
-  // public
-  setFollowMouse(bool) {
+  public setFollowMouse(bool: boolean) {
     if (this.followMouse === bool) return
     this.followMouse = bool
   }
-  setZoom(value) {
+  public setZoom(value: number) {
     if (this.zoom === value) return
     this.zoom = value 
   }
-  setCurrentZoom(value) {
+  public setCurrentZoom(value: number) {
     if (this.currentZoom === value) return
     this.currentZoom = value 
   }
-  setZoomLevel(value) {
+  public setZoomLevel(value: number) {
     if (this.zoomLevel === value) return
     this.zoomLevel = value 
   }
-  setCenter(coordinate) {
-    const center = this.center
-    if (coordinate.x === center.x && coordinate.y === center.y) return
-    this.center = this.targetCenter = coordinate
-    this.observe.trigger('updatePosition')
+  public setCenter(coordinate: Coordinate) {
+    if (coordinate.x === this.center.x && coordinate.y === this.center.y) return
+    this.center.x = coordinate.x
+    this.center.y = coordinate.y
+    this.targetCenter.x = coordinate.x
+    this.targetCenter.y = coordinate.y
+    this.observe.emit('updatePosition')
     this.loadMap()
   }
-  setCenterCoordinate(axis, value) {
+  public setCenterCoordinate(axis: 'x' | 'y', value: number) {
     if (this.center[axis] === value) return
     this.center[axis] = value 
   }
-  setTargetCenter(coordinate) {
-    if (coordinate.x === this.targetCenter.x && coordinate.y === this.targetCenter.y) return
-    this.targetCenter = coordinate 
-  }
-  setTargetCenterCoordinate(axis, value) {
+  // TODO: replace with setCenterCoordinate
+  // public setTargetCenter(coordinate: Coordinate) {
+  //   if (coordinate.x === this.targetCenter.x && coordinate.y === this.targetCenter.y) return
+  //   this.targetCenter = coordinate 
+  // }
+  public setTargetCenterCoordinate(axis: 'x' | 'y', value: number) {
     if (this.targetCenter[axis] === value) return
     this.targetCenter[axis] = value 
   }
-  setMapContainerCoordinate(axis, value) {
+  public setMapContainerCoordinate(axis: 'x' | 'y', value: number) {
     this.mapContainer.position[axis] = value
   }
-  setPanSpeed(value) {
+  public setPanSpeed(value: number) {
     if(this.panSpeed === value) return
     this.panSpeed = value
   }
-  setPanDirection(direction) {
+  public setPanDirection(direction: 'left' | 'right') {
     this.panDirection = direction === 'right' ?  PAN_DIRECTION_RIGHT : PAN_DIRECTION_LEFT
   }
 }

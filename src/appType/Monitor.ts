@@ -1,21 +1,34 @@
+import Map from './Map'
+import Observe from './Observe'
+
+import {Options, Coordinate, Mount, Size} from './interfaces'
+import {PixiRender} from './PixiInterfaces'
+
 import consts from './consts'
 import factor from './factor'
 const { PAN_DIRECTION_LEFT, PAN_DIRECTION_RIGHT }  = consts
 const { zoomDamping, dragDamping, threshold, panStop} = factor
 
 export default class Handlers {
+  private readonly options: Options
+  private readonly map: Map
+  private readonly observe: Observe
+  private readonly mount: Mount 
+  private readonly mouseCoordinate: Coordinate 
+  private readonly render: PixiRender
+  private isPanning: boolean = false
 
-  constructor(map, observe, events, render){
+  constructor(options: Options, map: Map, observe: Observe, mount: Mount, render: PixiRender){
+    this.options = options 
     this.map = map
     this.observe = observe
-    this.size = events.size
-    this.mouseCoordinate = events.mouseCoordinate
+    this.mount = mount
+    this.mouseCoordinate = mount.mouseCoordinate
     this.render = render
     this.bindEvents()
-    this.isPanning = false 
   }
 
-  bindEvents() {
+  private bindEvents() {
     const observe = this.observe
 
     observe.on('beforeRender', this.updateZoom.bind(this))
@@ -28,14 +41,14 @@ export default class Handlers {
     observe.on('setAutoPan', this.autoPan.bind(this))
   }
 
-  resize() {
+  private resize() {
     console.log('resize')
-    this.render.resize(this.size.canvasW, this.size.canvasH)
+    this.render.resize(this.mount.canvasSize.width, this.mount.canvasSize.height)
   }
 
-  setZoom (zoom, zoomPoint, force) {
+  private setZoom (zoom: number, isFollowMouse: boolean) {
     const map = this.map
-    const {minZoom, maxZoom} = map.config 
+    const {minZoom, maxZoom} = this.options 
     const {tileLoadingCounter, zoomLevel} = map
 
     if (zoom === minZoom || zoom === maxZoom) return
@@ -43,7 +56,7 @@ export default class Handlers {
     if      (zoom < minZoom) { zoom = minZoom }
     else if (zoom > maxZoom) { zoom = maxZoom }
 
-    map.setFollowMouse( !!zoomPoint )
+    map.setFollowMouse( isFollowMouse)
 
     if (Math.floor(Math.round(zoom*10)/10) !== zoomLevel && tileLoadingCounter === 0) {
       map.setZoomLevel( Math.floor(Math.round(zoom*10)/10))
@@ -52,25 +65,18 @@ export default class Handlers {
     }
 
     map.setZoom( zoom )
-
-    if (force) {
-      this.updateZoom('', true)
-    }
   }
 
-  updateZoom(time, force) {
+  private updateZoom() {
     const map = this.map
-    const {zoom, center, currentZoom, lastAnimTimeDelta, followMouse} = map
-    const {minZoom, maxZoom, maxTileZoom, minTileZoom} = map.config 
+    const lastAnimTimeDelta = this.mount.lastAnimTimeDelta
+    const {zoom, center, currentZoom, followMouse} = map
+    const {minZoom, maxZoom, maxTileZoom, minTileZoom} = this.options 
 
     if (Math.abs(currentZoom - zoom) > threshold) {
 
-      let zoomDiff
-      if (force) {
-        zoomDiff = zoom - currentZoom;
-      } else {
-        zoomDiff = ((zoom - currentZoom) / Math.max(1, zoomDamping * (60 / lastAnimTimeDelta)))
-      }
+      // Easy zooming
+      const zoomDiff = ((zoom - currentZoom) / Math.max(1, zoomDamping * (60 / lastAnimTimeDelta)))
 
       const zoomScale = Math.pow(2, -zoomDiff)
 
@@ -83,6 +89,7 @@ export default class Handlers {
           y: c1.y - (c1.y - z.y) * zoomScale * -zoomDiff * (Math.sqrt(2/zoomScale) / (2*zoomScale)),
         }
 
+        // Set center & targetCenter
         map.setCenter(c2)
       }
 
@@ -94,20 +101,21 @@ export default class Handlers {
       // Scale the actual containers
       for (let i = minZoom; i <= maxZoom; i++) {
         const newScale = 1 / Math.pow(2, newZoom - i);
-        map.mapContainerZoom[i].scale.x = map.mapContainerZoom[i].scale.y = newScale;
+        map.mapCollections[i].scale.x = map.mapCollections[i].scale.y = newScale;
       }
 
       map.mapContainerBackground.scale.x = map.mapContainerBackground.scale.y = 1 / Math.pow(2, newZoom- 1);
 
-      map.mapContainerZoom[Math.max(Math.min(map.zoomLevel, maxTileZoom), minTileZoom)].visible = true;
+      map.mapCollections[Math.max(Math.min(map.zoomLevel, maxTileZoom), minTileZoom)].visible = true;
 
     }
   }
 
   updatePosition () {
     const map = this.map
-    const { center, targetCenter, currentZoom, dpr} = map
-    const size = this.size
+    const dpr = this.options.dpr
+    const { center, targetCenter, currentZoom} = map
+    const canvasSize = this.mount.canvasSize
 
     if (Math.abs(center.x - targetCenter.x) > threshold) {
       const x = center.x + ((targetCenter.x - center.x) / dragDamping)
@@ -121,32 +129,32 @@ export default class Handlers {
       map.loadMapMedium()
     }
 
-    const pos_x = -(center.x / Math.pow(2, currentZoom - 1)) + (size.canvasW * dpr) / 2
-    const pos_y = -(center.y / Math.pow(2, currentZoom - 1)) + (size.canvasH * dpr) / 2
+    const pos_x = -(center.x / Math.pow(2, currentZoom - 1)) + (canvasSize.width  * dpr) / 2
+    const pos_y = -(center.y / Math.pow(2, currentZoom - 1)) + (canvasSize.height * dpr) / 2
 
     map.setMapContainerCoordinate('x', pos_x) 
     map.setMapContainerCoordinate('y', pos_y) 
   }
 
-  autoPan(duration) {
-    const width = this.map.config.width
-    const {currentZoom, dpr}= this.map
-
+  private autoPan(duration: number) {
+    const imageW = this.options.imageW
+    const currentZoom = this.map.currentZoom
     // TODO
-    if ((map.getMapSizeForZoom(currentZoom).width - window.innerWidth) < 0) {
-      // image does not fill window
-      return
-    }
-    const panSpeed = (width - window.innerWidth * dpr * Math.pow(2, currentZoom - 1)) / duration
-    map.setPanSpeed(panSpeed)
+    // if ((map.getMapSizeForZoom(imageW, imageH, currentZoom).imageW - window.innerWidth) < 0) {
+    //   // image does not fill window
+    //   return
+    // }
+    const panSpeed = (imageW - window.innerWidth * this.options.dpr * Math.pow(2, currentZoom - 1)) / duration
+    this.map.setPanSpeed(panSpeed)
   }
 
-  stopAutoPan() {
+  private stopAutoPan() {
     this.map.setPanSpeed(0)
   }
 
-  panTo(coordinate) {
-    this.map.setTargetCenter(coordinate)
+  private panTo(coordinate: Coordinate) {
+    this.map.setTargetCenterCoordinate('x', coordinate.x)
+    this.map.setTargetCenterCoordinate('y', coordinate.y)
   }
 
 
@@ -161,18 +169,20 @@ export default class Handlers {
     }
     // TODO: direction change err
     if (Math.abs(map.panSpeed) > 0) {
-      const {currentZoom, targetCenter, center, lastAnimTimeDelta, panDirection} = map
-      const width = this.map.config.width
+      const lastAnimTimeDelta = this.mount.lastAnimTimeDelta
+      const {currentZoom, targetCenter, center, panDirection} = map
+      const imageW = this.options.imageW
+      const canvasSize = this.mount.canvasSize
 
       const p1 = this.containerPixelToCoordinate({x: 0, y: 0})
-      const p2 = this.containerPixelToCoordinate({x: this.size.canvasW, y: this.size.canvasH})
+      const p2 = this.containerPixelToCoordinate({x: canvasSize.width, y: canvasSize.height})
 
 
-      if (p1.x < 0 && this.panDirection === PAN_DIRECTION_LEFT) {
+      if (p1.x < 0 && this.map.panDirection === PAN_DIRECTION_LEFT) {
         // Pan right 
         map.setPanDirection('right')
       } 
-      else if (p2.x > width && this.panDirection === PAN_DIRECTION_RIGHT) {
+      else if (p2.x > imageW && this.map.panDirection === PAN_DIRECTION_RIGHT) {
         // Pan left
         map.setPanDirection('left')
       } else {
@@ -185,7 +195,8 @@ export default class Handlers {
   }
 
   containerPixelToCoordinate (point) {
-    const {dpr, currentZoom, mapContainer} = this.map
+    const {currentZoom, mapContainer} = this.map
+    const dpr = this.options.dpr
 
     const x = Math.round(point.x * dpr)
     const y = Math.round(point.y * dpr)
@@ -197,8 +208,10 @@ export default class Handlers {
   }
 
 
+  // No use
   coordinateToContainerPixel (coordinate) {
-    const {dpr, mapContainer} = this.map
+    const {currentZoom, mapContainer} = this.map
+    const dpr = this.options.dpr
 
     const containerX = (coordinate.x / Math.pow(2, currentZoom-1) + mapContainer.position.x) / dpr
     const containerY = (coordinate.y / Math.pow(2, currentZoom-1) + mapContainer.position.y) / dpr
