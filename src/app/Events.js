@@ -76,6 +76,7 @@ export default class Events {
       const dy = this.mouseCoordinate.y - moveData.start.y
       const map = this.map
 
+      console.log('center', moveData.start.center)
       const newX = moveData.start.center.x - dx * map.dpr * Math.pow(2, map.currentZoom - 1);
       const newY = moveData.start.center.y - dy * map.dpr * Math.pow(2, map.currentZoom - 1);
 

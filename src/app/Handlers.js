@@ -60,7 +60,6 @@ export default class Handlers {
   }
 
   updateZoom(time, force) {
-    console.log('force', force)
     const map = this.map
     const {zoom, center, currentZoom, lastAnimTimeDelta, followMouse} = map
     const {minZoom, maxZoom, maxTileZoom, minTileZoom} = map.config 

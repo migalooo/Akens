@@ -1,8 +1,11 @@
 import {PixiGraphics} from './PixiInterfaces'
 
 export interface Options {
-  readonly imageH: number,
-  readonly imageW: number,
+  readonly imageSize: {
+    readonly width: number
+    readonly height: number
+  }
+  readonly dpr: number,
   readonly maxTileZoom: number,
   readonly minTileZoom: number,
   readonly maxZoom: number,
@@ -10,16 +13,15 @@ export interface Options {
   readonly defaultZoom: number,
   readonly tileSize: number,
   readonly tilePath: string,
-  readonly dpr: number,
   readonly background: number,
   readonly panSpeed: number,
   readonly center?: Coordinate
 }
 
 export interface Mount {
-  // el: HTMLElement
+  el: HTMLElement
   canvasSize: Size
-  mouseCoordinate: Coordinate
+  mouseMovingCoordinate: Coordinate
   lastAnimTime: number
   lastAnimTimeDelta: number
 }
@@ -37,3 +39,14 @@ export interface Coordinate {
 export interface TileStore {
   [key: string]: PixiGraphics
 }
+
+export interface Snapshot {
+  center: Coordinate
+  position: Coordinate
+  distance: number
+  zoom: number
+}
+
+export interface MovePath extends Coordinate {
+  time: number 
+} 

@@ -4,26 +4,25 @@ import Observe from './Observe'
 import {Options, Coordinate, Mount, Size} from './interfaces'
 import {PixiRender} from './PixiInterfaces'
 
-import consts from './consts'
-import factor from './factor'
-const { PAN_DIRECTION_LEFT, PAN_DIRECTION_RIGHT }  = consts
-const { zoomDamping, dragDamping, threshold, panStop} = factor
+import { PAN_DIRECTION_LEFT, PAN_DIRECTION_RIGHT } from './consts'
+import { zoomDamping, dragDamping, threshold, panStop} from './factor'
 
 export default class Handlers {
   private readonly options: Options
   private readonly map: Map
   private readonly observe: Observe
   private readonly mount: Mount 
-  private readonly mouseCoordinate: Coordinate 
+  private readonly mouseMovingCoordinate: Coordinate 
   private readonly render: PixiRender
-  private isPanning: boolean = false
+
+  public  isPanning: boolean = false
 
   constructor(options: Options, map: Map, observe: Observe, mount: Mount, render: PixiRender){
     this.options = options 
     this.map = map
     this.observe = observe
     this.mount = mount
-    this.mouseCoordinate = mount.mouseCoordinate
+    this.mouseMovingCoordinate = mount.mouseMovingCoordinate
     this.render = render
     this.bindEvents()
   }
@@ -46,7 +45,7 @@ export default class Handlers {
     this.render.resize(this.mount.canvasSize.width, this.mount.canvasSize.height)
   }
 
-  private setZoom (zoom: number, isFollowMouse: boolean) {
+  public zooming (zoom: number, isFollowMouse: boolean) {
     const map = this.map
     const {minZoom, maxZoom} = this.options 
     const {tileLoadingCounter, zoomLevel} = map
@@ -81,7 +80,7 @@ export default class Handlers {
       const zoomScale = Math.pow(2, -zoomDiff)
 
       if (followMouse) {
-        const z = this.containerPixelToCoordinate(this.mouseCoordinate)
+        const z = this.containerPixelToCoordinate(this.mouseMovingCoordinate)
         const c1 = center
 
         const c2 = {
@@ -111,7 +110,7 @@ export default class Handlers {
     }
   }
 
-  updatePosition () {
+  private updatePosition () {
     const map = this.map
     const dpr = this.options.dpr
     const { center, targetCenter, currentZoom} = map
@@ -137,14 +136,14 @@ export default class Handlers {
   }
 
   private autoPan(duration: number) {
-    const imageW = this.options.imageW
+    const width = this.options.imageSize.width
     const currentZoom = this.map.currentZoom
     // TODO
-    // if ((map.getMapSizeForZoom(imageW, imageH, currentZoom).imageW - window.innerWidth) < 0) {
+    // if ((map.getMapSizeForZoom(width, imageH, currentZoom).width - window.innerWidth) < 0) {
     //   // image does not fill window
     //   return
     // }
-    const panSpeed = (imageW - window.innerWidth * this.options.dpr * Math.pow(2, currentZoom - 1)) / duration
+    const panSpeed = (width - window.innerWidth * this.options.dpr * Math.pow(2, currentZoom - 1)) / duration
     this.map.setPanSpeed(panSpeed)
   }
 
@@ -152,7 +151,7 @@ export default class Handlers {
     this.map.setPanSpeed(0)
   }
 
-  private panTo(coordinate: Coordinate) {
+  public panTo(coordinate: Coordinate) {
     this.map.setTargetCenterCoordinate('x', coordinate.x)
     this.map.setTargetCenterCoordinate('y', coordinate.y)
   }
@@ -171,7 +170,7 @@ export default class Handlers {
     if (Math.abs(map.panSpeed) > 0) {
       const lastAnimTimeDelta = this.mount.lastAnimTimeDelta
       const {currentZoom, targetCenter, center, panDirection} = map
-      const imageW = this.options.imageW
+      const width = this.options.imageSize.width
       const canvasSize = this.mount.canvasSize
 
       const p1 = this.containerPixelToCoordinate({x: 0, y: 0})
@@ -182,7 +181,7 @@ export default class Handlers {
         // Pan right 
         map.setPanDirection('right')
       } 
-      else if (p2.x > imageW && this.map.panDirection === PAN_DIRECTION_RIGHT) {
+      else if (p2.x > width && this.map.panDirection === PAN_DIRECTION_RIGHT) {
         // Pan left
         map.setPanDirection('left')
       } else {
@@ -194,7 +193,7 @@ export default class Handlers {
     }
   }
 
-  containerPixelToCoordinate (point) {
+  public containerPixelToCoordinate (point: Coordinate) {
     const {currentZoom, mapContainer} = this.map
     const dpr = this.options.dpr
 
@@ -209,7 +208,7 @@ export default class Handlers {
 
 
   // No use
-  coordinateToContainerPixel (coordinate) {
+  public coordinateToContainerPixel (coordinate: Coordinate) {
     const {currentZoom, mapContainer} = this.map
     const dpr = this.options.dpr
 

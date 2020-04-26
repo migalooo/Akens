@@ -1,27 +1,42 @@
+import {Options, Mount, Coordinate, Snapshot, MovePath} from './interfaces'
 import Map from './Map'
 import Monitor from './Monitor'
 
 export default class Events {
   private readonly map: Map
   private readonly monitor: Monitor 
+  private readonly options: Options 
 
-  constructor(mount, map, monitor) {
-    this.map = map
+  private readonly mouseMovingCoordinate: Coordinate
+  private readonly mouseStartCoordinate: Coordinate = {x: 0, y: 0}
+
+  private mapSnapshot: Snapshot
+  private movePaths: MovePath[] = []
+
+  private isDragging: boolean = false
+  private isPinching: boolean = false
+  private isMoving: boolean = false
+  private lastMouseUpTime: number = 0
+
+  constructor(options: Options, mount: Mount, map: Map, monitor: Monitor) {
+    this.options = options
     this.monitor = monitor
-
-    this.mouseCoordinate = mount.mouseCoordinate
-    this.moveData = {
-      start: { x: 0, y: 0, switch: false, center: null, position: null, zoom: null, distance: null}
-    }
-    this.dragging = false
-    this.pinching = false
-    this.moveLog = []
-    this.lastMouseUp = 0
-
+    this.map = map
+    this.mouseMovingCoordinate = mount.mouseMovingCoordinate
     this.initEvents(mount.el)
+
+    this.mapSnapshot = {
+      center: {
+        x: map.center.x,
+        y: map.center.y
+      },
+      position: map.mapContainer.position.clone(),
+      distance: 0,
+      zoom: options.defaultZoom
+    }
   }
 
-  initEvents(el) {
+  private initEvents(el) {
     el.addEventListener('mousedown',  this.start.bind(this))
     el.addEventListener('mousemove',  this.move.bind(this))
     el.addEventListener('mouseup',    this.end.bind(this))
@@ -34,105 +49,107 @@ export default class Events {
     el.addEventListener('mousewheel', this.scroll.bind(this))
   }
 
-  setMouseCoordinates(coordinate) {
-    this.mouseCoordinate.x = coordinate.x
-    this.mouseCoordinate.y = coordinate.y
+  private setMouseMovingCoordinate(coordinate: Coordinate) {
+    this.mouseMovingCoordinate.x = coordinate.x
+    this.mouseMovingCoordinate.y = coordinate.y
   }
 
-  start(e) {
-    e.preventDefault()
-    this.setMouseCoordinates({x: e.offsetX, y: e.offsetY})
-    const map = this.map
-    this.moveLog = []
-    const moveData = this.moveData
+  private setMouseStartCoordinates(coordinate: Coordinate) {
+    this.mouseStartCoordinate.x = coordinate.x
+    this.mouseStartCoordinate.y = coordinate.y
+  }
 
-    moveData.start.center   = map.center
-    moveData.start.position = map.mapContainer.position.clone()
-    moveData.start.x = this.mouseCoordinate.x
-    moveData.start.y = this.mouseCoordinate.y
-    moveData.start.switch = true
+  private start(e) {
+    e.preventDefault()
+
+    this.setMouseMovingCoordinate({x: e.offsetX, y: e.offsetY})
+    const map = this.map
+    const mapSnapshot = this.mapSnapshot
+    this.movePaths = []
+
+    mapSnapshot.center.x = map.center.x
+    mapSnapshot.center.y = map.center.y
+    mapSnapshot.position = map.mapContainer.position.clone()
+    this.setMouseStartCoordinates(this.mouseMovingCoordinate)
+
+    this.isMoving = true
 
     if (e.touches && e.touches.length === 1) {
-      this.dragging = true
-      this.pinching = false
+      this.isDragging = true
+      this.isPinching = false
       return
     } 
     if (e.touches && e.touches.length === 2) {
-      this.dragging = false
-      this.pinching = true
-      moveData.start.distance = Math.sqrt(
+      this.isDragging = false
+      this.isPinching = true
+      mapSnapshot.distance = Math.sqrt(
         Math.pow(e.touches[0].pageX - e.touches[1].pageX, 2) +
         Math.pow(e.touches[0].pageY - e.touches[1].pageY, 2)
       )
-      moveData.start.zoom = map.zoom
+      mapSnapshot.zoom = map.zoom
       return
     }
 
-    this.dragging = true
-    this.pinching = false
+    this.isDragging = true
+    this.isPinching = false
   }
   move(e) {
     e.preventDefault()
-    this.setMouseCoordinates({x: e.offsetX, y: e.offsetY})
-    
-    const moveData = this.moveData
-    if(this.dragging && moveData.start.switch) {
 
-      const dx = this.mouseCoordinate.x - moveData.start.x
-      const dy = this.mouseCoordinate.y - moveData.start.y
+    this.setMouseMovingCoordinate({x: e.offsetX, y: e.offsetY})
+    if (this.isDragging && this.isMoving) {
       const map = this.map
+      const dpr = this.options.dpr
+      const mapSnapshot = this.mapSnapshot
 
-      const newX = moveData.start.center.x - dx * map.dpr * Math.pow(2, map.currentZoom - 1);
-      const newY = moveData.start.center.y - dy * map.dpr * Math.pow(2, map.currentZoom - 1);
+      // Moving Delta
+      const dx = this.mouseMovingCoordinate.x - this.mouseStartCoordinate.x
+      const dy = this.mouseMovingCoordinate.y - this.mouseStartCoordinate.y
 
-      this.moveLog.push({
-        x: this.mouseCoordinate.x,
-        y: this.mouseCoordinate.y,
-        time: new Date()*1
+      const newX = mapSnapshot.center.x - dx * dpr * Math.pow(2, map.currentZoom - 1)
+      const newY = mapSnapshot.center.y - dy * dpr * Math.pow(2, map.currentZoom - 1)
+
+      this.movePaths.push({
+        x: this.mouseMovingCoordinate.x,
+        y: this.mouseMovingCoordinate.y,
+        time: Date.now()
       })
 
-      this.moveLog = this.moveLog.slice(-10)
-
+      this.movePaths = this.movePaths.slice(-10)
       map.setCenter({x: newX, y: newY})
     }
   }
   end(e) {
     e.preventDefault()
-    const currentMoveCoordinate = {
-      x: this.mouseCoordinate.x,
-      y: this.mouseCoordinate.y
-    }
 
-    const mouseMoveDelta = {
-      x: this.moveData.start.x - currentMoveCoordinate.x,
-      y: this.moveData.start.y - currentMoveCoordinate.y
-    }
+    // Moving Delta abs
+    const dx = Math.abs(this.mouseMovingCoordinate.x - this.mouseStartCoordinate.x)
+    const dy = Math.abs(this.mouseMovingCoordinate.y - this.mouseStartCoordinate.y)
+    const currentTime = Date.now()
+    const timeDelta = currentTime - this.lastMouseUpTime
 
-    this.moveData.start.switch = false 
-    // this.moveData.start = { x: 0, y: 0 }
+    this.isMoving = false 
 
     // Double click
-    const currentTime = Date.now()
-    const timeDelta = currentTime - this.lastMouseUp
-    if (!this.pinching && this.lastMouseUp && timeDelta < 300 && Math.abs(mouseMoveDelta.x) < 10 && Math.abs(mouseMoveDelta.y) < 10) {
-      this.monitor.setZoom(this.map.zoom - 1, true)
-      this.lastMouseUp = 0
+    if (!this.isPinching && this.lastMouseUpTime && timeDelta < 300 && dx < 10 && dy < 10) {
+      this.monitor.zooming(this.map.zoom - 1, true)
+      this.lastMouseUpTime = 0
       return
     }
-    this.lastMouseUp = currentTime
+    this.lastMouseUpTime = currentTime
 
     // Pinching
-    if(this.pinching) {
+    if(this.isPinching) {
       console.log('pinching')
       return
     }
 
     // Click
-    if (Math.abs(mouseMoveDelta.x) < 5 && Math.abs(mouseMoveDelta.y) < 5) {
-      const tiles = [];
-      const {minTileZoom, maxTileZoom, tileSize} = this.map.config
+    if (dx<5 && dy<5) {
+      const tiles: string[] = []
+      const {minTileZoom, maxTileZoom, tileSize} = this.options
 
-      let imageCoordinate = this.monitor.containerPixelToCoordinate(currentMoveCoordinate)
+      let imageCoordinate = this.monitor.containerPixelToCoordinate(this.mouseMovingCoordinate)
 
       for (let i = minTileZoom; i <= maxTileZoom; i++) {
         const tx = Math.floor(imageCoordinate.x / Math.pow(2, i - 1) / tileSize) * tileSize
@@ -140,24 +157,24 @@ export default class Events {
         tiles.push(i + "/tile_"+tx+"_"+ty+".jpg")
       }
 
-      console.log("Click at image:", imageCoordinate)
-      console.log("Click on tiles:", tiles)
       return
     }
     // Pan to
     const map = this.map
-    const moveLog = this.moveLog
-    const len = moveLog.length
-    if (len > 2 && ((new Date())*1 - moveLog[len - 1].time) < 100) {
-      const sx = (moveLog[0].x - moveLog[len-1].x) / (moveLog[0].time - moveLog[len-1].time) * map.dpr
-      const sy = (moveLog[0].y - moveLog[len-1].y) / (moveLog[0].time - moveLog[len-1].time) * map.dpr
+    const dpr = this.options.dpr
+    const movePaths = this.movePaths
+    const len = movePaths.length
+    if (len > 2 && (Date.now() - movePaths[len-1].time) < 100) {
+      const lastPath = this.movePaths[len-1]
+      const firstPath = this.movePaths[0]
+      const sx = (firstPath.x - lastPath.x) / (firstPath.time - lastPath.time) * dpr
+      const sy = (firstPath.y - lastPath.y) / (firstPath.time - lastPath.time) * dpr
 
-      const realX = sx * Math.pow(2, this.map.currentZoom-1) * 200
-      const realY = sy * Math.pow(2, this.map.currentZoom-1) * 200
+      const realX = sx * Math.pow(2, map.currentZoom-1) * 200
+      const realY = sy * Math.pow(2, map.currentZoom-1) * 200
 
       this.monitor.isPanning = true
       this.monitor.panTo({x: map.center.x - realX, y: map.center.y - realY})
-      return
     }
   }
   scroll(e) {
@@ -165,7 +182,7 @@ export default class Events {
     const delta = e.deltaY 
     if (delta) {
       let newZoom = this.map.zoom - delta / 3 / 32
-      this.monitor.setZoom(newZoom, true)
+      this.monitor.zooming(newZoom, true)
     }
   }
 }

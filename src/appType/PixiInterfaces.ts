@@ -12,6 +12,7 @@ export interface PixiDisplayObjectContainer {
   position: {
     x: number
     y: number
+    clone: Function
   } 
   scale: {
     x: number

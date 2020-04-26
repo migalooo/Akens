@@ -1,13 +1,11 @@
 // @ts-ignore
 import PIXI  from 'PIXI'
 import Observe from './Observe'
-
 import {Options, Coordinate, TileStore, Mount, Size} from './interfaces'
 import {PixiStage, PixiGraphics, PixiDisplayObjectContainer} from './PixiInterfaces'
 
 import {throttle, debounce} from './tools'
-import consts from './consts'
-const {PAN_DIRECTION_LEFT, PAN_DIRECTION_RIGHT}  = consts
+import {PAN_DIRECTION_LEFT, PAN_DIRECTION_RIGHT} from './consts'
 
 export default class Map {
   private readonly options: Options
@@ -20,8 +18,8 @@ export default class Map {
   public  currentZoom: number
   public  zoomLevel: number
 
-  public  readonly center: Coordinate
-  public  readonly targetCenter: Coordinate
+  public   center: Coordinate = {x: 0, y: 0}
+  public   targetCenter: Coordinate = {x: 0, y: 0}
   public  followMouse: boolean = false
 
   public  panSpeed: number
@@ -49,7 +47,7 @@ export default class Map {
     this.zoomLevel = Math.floor(Math.round(this.currentZoom*10)/10)
 
 
-    const coordinate = options.center || {x: options.imageW/2, y: options.imageH/2}
+    const coordinate = options.center || {x: options.imageSize.width/2, y: options.imageSize.height/2}
     this.center.x = coordinate.x
     this.center.y = coordinate.y
     this.targetCenter.x = coordinate.x
@@ -65,7 +63,7 @@ export default class Map {
   }
 
   initContainer(stage: PixiStage) {
-    const {maxZoom, minZoom, imageW, imageH, maxTileZoom, tileSize} = this.options
+    const {maxZoom, minZoom, imageSize, maxTileZoom, tileSize} = this.options
 
     this.mapContainer = new PIXI.DisplayObjectContainer()
     this.mapContainer.interactive = true
@@ -74,7 +72,7 @@ export default class Map {
 
     let graphics: PixiGraphics = new PIXI.Graphics()
       // .beginFill(this.options.background)
-      .drawRect(0, 0, imageW, imageH)
+      .drawRect(0, 0, imageSize.width, imageSize.height)
       .endFill()
 
     graphics.position.x = 0
@@ -107,11 +105,11 @@ export default class Map {
   }
   
   private preLoadTiles() {
-    const {tileSize, maxTileZoom, imageW, imageH} = this.options
+    const {tileSize, maxTileZoom, imageSize} = this.options
     // Preload all tiles in top layer
     const scaleFactor = Math.pow(2, maxTileZoom - 1)
-    const maxAvailableXTile = Math.floor((imageW  / scaleFactor - 1) / tileSize) * tileSize
-    const maxAvailableYTile = Math.floor((imageH / scaleFactor - 1) / tileSize) * tileSize
+    const maxAvailableXTile = Math.floor((imageSize.width / scaleFactor - 1) / tileSize) * tileSize
+    const maxAvailableYTile = Math.floor((imageSize.height/ scaleFactor - 1) / tileSize) * tileSize
 
     for (let x = 0; x <= maxAvailableXTile; x+=tileSize) {
       for (let y = 0; y <= maxAvailableYTile; y+=tileSize) {
@@ -121,7 +119,7 @@ export default class Map {
   }
 
   private mapLoader() {
-    const {tileSize, maxTileZoom, minTileZoom, imageW, imageH} = this.options
+    const {tileSize, maxTileZoom, minTileZoom, imageSize} = this.options
 
     const currentZoom = Math.floor(Math.max(Math.min(this.currentZoom, maxTileZoom), minTileZoom)*10) / 10
     // place current zoom level at top of containers children
@@ -138,14 +136,14 @@ export default class Map {
     }
 
     console.log("Find out which tiles are needed")
-    console.log("Dimensions of the map:", imageW, imageH)
+    console.log("Full Dimensions of the map:", imageSize.width, imageSize.height)
     console.log("Current zoom:", currentZoom)
     console.log("Zoom level:", this.zoomLevel)
 
-    const mapDimensions = this.getMapSizeForZoom(imageW, imageH, this.zoomLevel)
+    const mapDimensions = this.getMapSizeForZoom(imageSize.width, imageSize.height, this.zoomLevel)
     const zoomDiff   = currentZoom - this.zoomLevel
-    const map_width  = mapDimensions.imageW
-    const map_height = mapDimensions.imageH
+    const map_width  = mapDimensions.width
+    const map_height = mapDimensions.height
     const pos_x      = this.mapContainer.position.x * -1   * Math.pow(2, zoomDiff)
     const pos_y      = this.mapContainer.position.y * -1   * Math.pow(2, zoomDiff)
     const w          = this.canvasSize.width * Math.pow(2, zoomDiff)
@@ -224,11 +222,11 @@ export default class Map {
   }
 
   // Get map size in viewport
-  private getMapSizeForZoom(imageW: number, imageH: number, zoomLevel: number) {
+  private getMapSizeForZoom(imageW: number, imageH: number, zoomLevel: number): Size {
     const map_width  = Math.ceil(imageW / Math.pow(2, zoomLevel-1))
     const map_height = Math.ceil(imageH / Math.pow(2, zoomLevel-1))
 
-    return {imageW: map_width, imageH: map_height}
+    return {width: map_width, height: map_height}
   }
 
   private addTile(tileX: number, tileY: number, zoomLevel: number): boolean {
@@ -289,7 +287,7 @@ export default class Map {
     }
   }
 
-  hideZoomLayers() {
+  private hideZoomLayers() {
     const {minTileZoom, maxTileZoom} = this.options
     for (let i = minTileZoom; i <= maxTileZoom; i++) {
       if (i !== this.zoomLevel) {
@@ -299,7 +297,7 @@ export default class Map {
     this.mapCollections[this.zoomLevel].visible = true
   }
 
-  addSpriteToMap (x: number, y: number, texture: object, mapContainer: PixiDisplayObjectContainer): PixiGraphics {
+  addSpriteToMap (x: number, y: number, texture: object | unknown, mapContainer: PixiDisplayObjectContainer): PixiGraphics {
     const sprite: PixiGraphics = new PIXI.Sprite(texture);
     sprite.anchor.x = sprite.anchor.y = 0
     sprite.position.x = x
@@ -347,11 +345,6 @@ export default class Map {
     if (this.center[axis] === value) return
     this.center[axis] = value 
   }
-  // TODO: replace with setCenterCoordinate
-  // public setTargetCenter(coordinate: Coordinate) {
-  //   if (coordinate.x === this.targetCenter.x && coordinate.y === this.targetCenter.y) return
-  //   this.targetCenter = coordinate 
-  // }
   public setTargetCenterCoordinate(axis: 'x' | 'y', value: number) {
     if (this.targetCenter[axis] === value) return
     this.targetCenter[axis] = value 
@@ -364,6 +357,7 @@ export default class Map {
     this.panSpeed = value
   }
   public setPanDirection(direction: 'left' | 'right') {
-    this.panDirection = direction === 'right' ?  PAN_DIRECTION_RIGHT : PAN_DIRECTION_LEFT
+    // PAN_DIRECTION_RIGHT: 1 PAN_DIRECTION_LEFT: -1
+    this.panDirection = direction === 'right' ?  1 : -1
   }
 }
