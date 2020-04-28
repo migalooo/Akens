@@ -71,7 +71,7 @@ export default class Map {
     this.mapContainerBackground = new PIXI.DisplayObjectContainer()
 
     let graphics: PixiGraphics = new PIXI.Graphics()
-      // .beginFill(this.options.background)
+      .beginFill(this.options.background)
       .drawRect(0, 0, imageSize.width, imageSize.height)
       .endFill()
 
@@ -357,7 +357,6 @@ export default class Map {
     this.panSpeed = value
   }
   public setPanDirection(direction: 'left' | 'right') {
-    // PAN_DIRECTION_RIGHT: 1 PAN_DIRECTION_LEFT: -1
-    this.panDirection = direction === 'right' ?  1 : -1
+    this.panDirection = direction === 'right' ?  PAN_DIRECTION_RIGHT : PAN_DIRECTION_LEFT 
   }
 }
