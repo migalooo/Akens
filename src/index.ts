@@ -1,4 +1,4 @@
-import Viewer from './appType/Core'
+import Viewer from './app/Core'
 
 new Viewer('#app', {
   imageSize: {
