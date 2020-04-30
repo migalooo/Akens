@@ -14,7 +14,7 @@ module.exports = {
     extensions: ['.ts', '.js'],
     alias: {
       '>': path.resolve(__dirname, 'src'),
-      'PIXI': path.resolve(__dirname, '../src/lib/pixi.1.6.1')
+      'PIXI': path.resolve(__dirname, '../static/pixi-v1.6.0.js')
     }
   },
   devServer: {

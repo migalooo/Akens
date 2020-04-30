@@ -14,9 +14,6 @@
     "test": "jest",
     "test-c": "jest --coverage"
   },
-  "jest": {
-    "testEnvironment": "node"
-  },
   "devDependencies": {
     "@types/jest": "^25.2.1",
     "css-loader": "^3.4.2",
@@ -31,6 +28,7 @@
     "typescript": "^3.8.3",
     "webpack": "^4.42.1",
     "webpack-cli": "^3.3.11",
-    "webpack-dev-server": "^3.10.3"
+    "webpack-dev-server": "^3.10.3",
+    "jest-canvas-mock": "^2.2.0"
   }
 }

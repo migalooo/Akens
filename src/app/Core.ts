@@ -8,7 +8,7 @@ import Events from './Events'
 import Monitor from './Monitor'
 import Observe from './Observe'
 
-export default class ImageViewer {
+export default class Core {
   private readonly el: HTMLElement 
   private mount: Mount
   private options: Options
