@@ -1,6 +1,5 @@
 module.exports = {
   testEnvironment: 'jsdom',
-  rootDir: '',
   roots: [
     "<rootDir>/test"
   ],
@@ -12,11 +11,8 @@ module.exports = {
     "node_modules"
   ],
   moduleNameMapper: {
-    "PIXI": "<rootDir>/static/pixi-v1.6.0.js",
+    "PIXI": "<rootDir>/test/mock/PIXI.ts",
   },
-  testPathIgnorePatterns: [
-    "<rootDir>/static/"
-  ],
   setupFiles:["jest-canvas-mock"],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node']
 }

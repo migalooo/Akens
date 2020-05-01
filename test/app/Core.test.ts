@@ -1,5 +1,4 @@
 import Core from '../../src/app/Core'
-jest.unmock("PIXI")
 
 document.body.innerHTML = `
   <div id="app"></div>
