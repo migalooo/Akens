@@ -2,6 +2,7 @@
 import PIXI  from 'PIXI'
 import {Options, Mount, Size} from './interfaces'
 import {PixiRender, PixiStage} from './PixiInterfaces'
+import log  from './log'
 
 import Map from './Map'
 import Events from './Events'
@@ -10,8 +11,8 @@ import Observe from './Observe'
 
 export default class Core {
   private readonly el: HTMLElement 
+  public options: Options
   private mount: Mount
-  private options: Options
 
   private map: Map
   private observe: Observe
@@ -28,7 +29,7 @@ export default class Core {
     this.init()
   }
 
-  public init() {
+  private init() {
     this.mount = {
       el: this.el,
       mouseMovingCoordinate: {
@@ -47,26 +48,26 @@ export default class Core {
     this.animateRender()
   }
 
-  private getCanvasSize(): Size {
+  public getCanvasSize(): Size {
     return {
-      width: Math.min(window.innerWidth, this.el.offsetWidth),
-      height: Math.min(window.innerHeight, this.el.offsetHeight)
+      width: Math.min(document.body.clientWidth, this.el.offsetWidth),
+      height: Math.min(document.body.clientHeight, this.el.offsetHeight)
     }
   }
 
   private setupPixi() {
     this.stage = new PIXI.Stage()
 
-    console.log("Initialize pixi with dpr:", this.options.dpr)
+    log("Initialize pixi with dpr:", this.options.dpr)
 
     const canvasSize = this.mount.canvasSize
     const renderDimensions = {width: canvasSize.width * this.options.dpr, height: canvasSize.height * this.options.dpr}
 
     this.render = PIXI.autoDetectRenderer(renderDimensions.width, renderDimensions.height, null, true, false)
-    console.log("Renderer:", this.render)
+    log("Renderer:", this.render)
 
     this.el.appendChild(this.render.view)
-    console.log("Client dimensions:", this.render.view.clientWidth, this.render.view.clientHeight)
+    log("Client dimensions:", this.render.view.clientWidth, this.render.view.clientHeight)
   }
 
   private animateRender(time: number = 0) {

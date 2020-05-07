@@ -3,6 +3,7 @@ import PIXI  from 'PIXI'
 import Observe from './Observe'
 import {Options, Coordinate, TileStore, Mount, Size} from './interfaces'
 import {PixiStage, PixiGraphics, PixiDisplayObjectContainer} from './PixiInterfaces'
+import log  from './log'
 
 import {throttle, debounce} from './tools'
 import {PAN_DIRECTION_LEFT, PAN_DIRECTION_RIGHT} from './consts'
@@ -125,20 +126,18 @@ export default class Map {
     // place current zoom level at top of containers children
     if (Math.floor(currentZoom) !== this.zoomLevel) {
       // Loading a new zoom level
-      console.log("Load a new zoom level!")
+      log("Load a new zoom level!")
       this.zoomLevel = Math.floor(Math.round(this.currentZoom*10)/10)
       this.mapContainerZoomLevels.removeChild(this.mapCollections[this.zoomLevel])
       this.mapContainerZoomLevels.addChild(this.mapCollections[this.zoomLevel])
     }
 
-    if (console.groupCollapsed) {
-      console.groupCollapsed("TiledImageViewer.loadMap")
-    }
+    log.groupCollapsed("TiledImageViewer.loadMap")
 
-    console.log("Find out which tiles are needed")
-    console.log("Full Dimensions of the map:", imageSize.width, imageSize.height)
-    console.log("Current zoom:", currentZoom)
-    console.log("Zoom level:", this.zoomLevel)
+    log("Find out which tiles are needed")
+    log("Full Dimensions of the map:", imageSize.width, imageSize.height)
+    log("Current zoom:", currentZoom)
+    log("Zoom level:", this.zoomLevel)
 
     const mapDimensions = this.getMapSizeForZoom(imageSize.width, imageSize.height, this.zoomLevel)
     const zoomDiff   = currentZoom - this.zoomLevel
@@ -149,9 +148,9 @@ export default class Map {
     const w          = this.canvasSize.width * Math.pow(2, zoomDiff)
     const h          = this.canvasSize.height * Math.pow(2, zoomDiff)
 
-    console.log("Zoom difference:", zoomDiff)
-    console.log("Closest zoomed dimensions of the map:", map_width, map_height)
-    console.log("Current part of map visible:", pos_x, pos_y)
+    log("Zoom difference:", zoomDiff)
+    log("Closest zoomed dimensions of the map:", map_width, map_height)
+    log("Current part of map visible:", pos_x, pos_y)
 
     const startPointX = Math.floor(pos_x / tileSize) * tileSize
     const startPointY = Math.floor(pos_y / tileSize) * tileSize
@@ -159,19 +158,16 @@ export default class Map {
     const endPointX = Math.floor((pos_x + w) / tileSize) * tileSize + tileSize
     const endPointY = Math.floor((pos_y + h) / tileSize) * tileSize + tileSize
 
-    console.log(startPointX, endPointX)
-    console.log(startPointY, endPointY)
-
     const maxAvailableXTile = Math.floor((map_width - 1) / tileSize) * tileSize
     const maxAvailableYTile = Math.floor((map_height - 1) / tileSize) * tileSize
 
-    console.log("Max available tiles: ", maxAvailableXTile, maxAvailableYTile)
+    log("Max available tiles: ", maxAvailableXTile, maxAvailableYTile)
 
     const maxXTile = Math.min(maxAvailableXTile, endPointX)
     const maxYTile = Math.min(maxAvailableYTile, endPointY)
 
-    console.log("Load X tiles from", startPointX, maxXTile)
-    console.log("Load Y tiles from", startPointY, maxYTile)
+    log("Load X tiles from", startPointX, maxXTile)
+    log("Load Y tiles from", startPointY, maxYTile)
 
     let added = 0, removed = 0
 
@@ -208,17 +204,14 @@ export default class Map {
       }
     }
 
-    console.log("Added", added, "tiles");
+    log("Added", added, "tiles");
 
     if (added === 0) {
-      console.log('No added tiles for this view, hide layers');
+      log('No added tiles for this view, hide layers');
       this.hideZoomLayers()
     }
 
-    if (console.groupEnd) {
-      console.groupEnd()
-    }
-
+    log.groupEnd()
   }
 
   // Get map size in viewport
@@ -234,7 +227,7 @@ export default class Map {
     const tileName = `${zoomLevel}_${tileX}_${tileY}`
 
     if (typeof this.tileStore[tileName] !== 'undefined') {
-      console.log('Show existing sprite')
+      log('Show existing sprite', tileName)
 
       this.tileStore[tileName].visible = true
       return false
@@ -243,13 +236,13 @@ export default class Map {
       this.tileLoadingCounter++
 
       const src = this.options.tilePath + zoomLevel + "/tile_"+tileX+"_"+tileY+".jpg"
-      console.log('Loading', src)
+      log('Loading', src)
 
       this.imageLoader(src, true)
         .then(texture => {
           this.tileStore[tileName] = this.addSpriteToMap(tileX, tileY, texture, mapContainer)
           if (--this.tileLoadingCounter === 0) {
-            console.log("All tiles loaded, hiding other zoom levels");
+            log("All tiles loaded, hiding other zoom levels");
             this.observe.emit('allTilesLoaded')
             this.hideZoomLayers()
           }
@@ -261,10 +254,12 @@ export default class Map {
     }
   }
 
-  private hideTile(x: number, y: number, zoomLevel: number): boolean {
-    if (typeof this.tileStore[zoomLevel + '_' + x + '_' + y] !== 'undefined') {
-      console.log('Hide existing sprite')
-      this.tileStore[zoomLevel + '_' + x + '_' + y].visible = false
+  private hideTile(tileX: number, tileY: number, zoomLevel: number): boolean {
+
+    const tileName = `${zoomLevel}_${tileX}_${tileY}`
+    if (typeof this.tileStore[tileName] !== 'undefined') {
+      log('Hide existing sprite', tileName)
+      this.tileStore[tileName].visible = false
       return true
     }
     return false

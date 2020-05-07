@@ -1,11 +1,11 @@
 import Core from '../../src/app/Core'
 
-
 describe('Test Core.ts', () => {
+
   document.body.innerHTML = `
   <div id="app"></div>
-`
-  const optins = {
+  `
+  const options = {
     imageSize: {
       width: 158701,
       height: 26180,
@@ -22,16 +22,24 @@ describe('Test Core.ts', () => {
     panSpeed: 0.1 
   }
 
-
-  const core = new Core('#app', optins)
-
-  it('Test Core constructor init', () => {
-    expect(core.el).toEqual(document.querySelector('#app'))
-    expect(core.options).toEqual(optins)
+  let core
+  it('Test Core constructor init options', () => {
+    core = new Core('#app', options)
   })
 
-  it('Test mount init value', () => {
-    expect(core.el).toEqual(document.querySelector('#app'))
-    expect(core.options).toEqual(optins)
+  it('Test Core getCanvasSize', () => {
+    const app = document.querySelector('#app')
+    Object.defineProperty(document.body, 'clientWidth', { value: 1200 })
+    Object.defineProperty(document.body, 'clientHeight', { value: 900 })
+    expect(core.getCanvasSize()).toEqual({
+      width: 0,
+      height: 0
+    })
+    Object.defineProperty(app, 'offsetWidth', { value: 1000 })
+    Object.defineProperty(app, 'offsetHeight', { value: 800 })
+    expect(core.getCanvasSize()).toEqual({
+      width: 1000,
+      height: 800
+    })
   })
 })

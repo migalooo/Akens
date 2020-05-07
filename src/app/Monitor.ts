@@ -1,5 +1,6 @@
 import Map from './Map'
 import Observe from './Observe'
+import log  from './log'
 
 import {Options, Coordinate, Mount, Size} from './interfaces'
 import {PixiRender} from './PixiInterfaces'
@@ -41,7 +42,7 @@ export default class Handlers {
   }
 
   private resize() {
-    console.log('resize')
+    log('resize')
     this.render.resize(this.mount.canvasSize.width, this.mount.canvasSize.height)
   }
 
@@ -59,7 +60,7 @@ export default class Handlers {
 
     if (Math.floor(Math.round(zoom*10)/10) !== zoomLevel && tileLoadingCounter === 0) {
       map.setZoomLevel( Math.floor(Math.round(zoom*10)/10))
-      console.log("Zooming with zoom layers hidden, show them all")
+      log("Zooming with zoom layers hidden, show them all")
       map.showAllZoomLayers()
     }
 

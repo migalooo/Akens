@@ -1,6 +1,7 @@
 import {Options, Mount, Coordinate, Snapshot, MovePath} from './interfaces'
 import Map from './Map'
 import Monitor from './Monitor'
+import log  from './log'
 
 export default class Events {
   private readonly map: Map
@@ -140,7 +141,7 @@ export default class Events {
 
     // Pinching
     if(this.isPinching) {
-      console.log('pinching')
+      log('pinching')
       return
     }
 
